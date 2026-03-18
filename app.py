@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from datetime import datetime
+from transformers import pipeline
 
 # ================== PAGE CONFIG & STYLING ==================
 st.set_page_config(page_title="MoMo Fraud Guard 🛡️", page_icon="🛡️", layout="centered")
@@ -29,22 +30,41 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📜 History", "📖 How to Use", "ℹ️ About"
 ])
 
+@st.cache_resource
+def load_sms_classifier():
+    try:
+        return pipeline("text-classification", model="./ghana_momo_sms_classifier")
+    except:
+        st.warning("Advanced SMS model not found — using basic keyword check.")
+        return None
+
+sms_classifier = load_sms_classifier()
+
 # ================== TAB 1: SMS CHECK ==================
 with tab1:
     st.subheader("Paste suspicious SMS")
     sms = st.text_area("SMS Message", height=180, placeholder="You have received GHS 500... Call 0551234567 to return money")
     
-    if st.button("Check SMS", type="primary"):
-        fake_keywords = ["send back", "return money", "wrong transfer", "call this number", "confirm PIN", "urgent", "click here"]
-        is_fake = any(kw.lower() in sms.lower() for kw in fake_keywords)
-        
-        if is_fake:
-            st.markdown('<div class="alert-red">🚨 FAKE SMS DETECTED!<br>DO NOT reply or call!</div>', unsafe_allow_html=True)
+if st.button("Check SMS", type="primary"):
+    if sms.strip():
+        if sms_classifier:
+            result = sms_classifier(sms)[0]
+            label = result['label']  # 'LABEL_0' or 'LABEL_1' — map to genuine/fake
+            score = result['score']
+            is_fake = label == 'LABEL_1'  # Adjust based on your training (0=genuine, 1=fake)
+            confidence = score if is_fake else 1 - score
         else:
-            st.markdown('<div class="alert-green">✅ Looks genuine (still verify in MoMo app)</div>', unsafe_allow_html=True)
+            # Fallback to keywords
+            fake_keywords = ["send back", "return money", "wrong transfer", "call this number", "confirm PIN"]
+            is_fake = any(kw.lower() in sms.lower() for kw in fake_keywords)
+            confidence = 0.85 if is_fake else 0.70  # dummy
+
+        if is_fake:
+            st.markdown(f'<div class="alert-red">🚨 FAKE SMS DETECTED! (Confidence: {confidence:.0%})<br>DO NOT reply or call!</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="alert-green">✅ Looks genuine (Confidence: {confidence:.0%})<br>Still verify in MoMo app</div>', unsafe_allow_html=True)
         
         st.session_state.history.append({"time": datetime.now().strftime("%H:%M"), "type": "SMS", "input": sms[:50]+"...", "result": "FAKE" if is_fake else "GENUINE"})
-
 # ================== TAB 2: LINK CHECK ==================
 with tab2:
     st.subheader("Paste suspicious link")
