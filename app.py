@@ -79,6 +79,22 @@ def load_sms_classifier():
 sms_classifier = load_sms_classifier()
 
 # ────────────────────────────────────────────────
+#   GENERATE SAMPLE TRANSACTION DATA
+# ────────────────────────────────────────────────
+def generate_paysim_like_data(n_samples):
+    """Generate synthetic transaction data for model training/testing."""
+    np.random.seed(42)
+    data = {
+        'amount': np.random.exponential(scale=5000, size=n_samples),
+        'oldbalanceOrg': np.random.exponential(scale=10000, size=n_samples),
+        'newbalanceOrig': np.random.exponential(scale=10000, size=n_samples),
+        'type_encoded': np.random.randint(0, 5, size=n_samples),
+        'balance_change_ratio': np.random.uniform(0, 2, size=n_samples),
+        'amount_deviation': np.random.uniform(0, 5, size=n_samples),
+    }
+    return pd.DataFrame(data)
+
+# ────────────────────────────────────────────────
 #   TABS
 # ────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -179,54 +195,70 @@ with tab2:
 #   TAB 3 – TRANSACTION CROSS CHECK
 # ────────────────────────────────────────────────
 with tab3:
-    st.subheader("Enter transaction details")
+    st.subheader("Enter transaction details to verify")
     col1, col2 = st.columns(2)
     with col1:
         amount = st.number_input("Amount (GHS)", min_value=0.0, value=500.0, step=10.0)
         old_bal = st.number_input("Old Balance (Sender)", min_value=0.0, value=2000.0, step=100.0)
     with col2:
         new_bal = st.number_input("New Balance (Sender)", min_value=0.0, value=1500.0, step=100.0)
-        trans_type = st.selectbox("Transaction Type", ["CASH_OUT", "TRANSFER", "PAYMENT", "DEPOSIT"])
+        trans_type = st.selectbox("Transaction Type", ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"])
 
     if st.button("Check Transaction", type="primary"):
-        np.random.seed(42)
-        synthetic = pd.DataFrame({
-            'amount': np.random.normal(800, 400, 500),
-            'oldbalanceOrg': np.random.normal(3000, 1500, 500),
-            'newbalanceOrig': np.random.normal(2500, 1400, 500),
-            'type_encoded': np.random.randint(0, 4, 500)
-        })
+        try:
+            # Load realistic data (fallback to generate if CSV missing)
+            try:
+                df = pd.read_csv("paysim_like_transactions.csv")
+            except FileNotFoundError:
+                df = generate_paysim_like_data(10000)  # small fallback generation
 
-        model = IsolationForest(contamination=0.02, random_state=42)
-        model.fit(synthetic)
+            # Feature prep for model
+            features = ['amount', 'oldbalanceOrg', 'newbalanceOrig', 'type_encoded',
+                        'balance_change_ratio', 'amount_deviation']
 
-        user_data = pd.DataFrame([{
-            'amount': amount,
-            'oldbalanceOrg': old_bal,
-            'newbalanceOrig': new_bal,
-            'type_encoded': ["CASH_OUT", "TRANSFER", "PAYMENT", "DEPOSIT"].index(trans_type)
-        }])
-
-        score = model.decision_function(user_data)[0]
-        is_fraud = score < 0
-
-        if is_fraud:
-            st.markdown(
-                '<div class="alert-red">🚨 SUSPICIOUS TRANSACTION!<br>Possible fraud detected</div>',
-                unsafe_allow_html=True
+            # Train Isolation Forest on full data
+            model = IsolationForest(
+                n_estimators=150,          # more trees for better stability
+                contamination=0.01,        # expect ~1% anomalies
+                random_state=42,
+                max_samples=1024
             )
-        else:
-            st.markdown(
-                '<div class="alert-green">✅ Genuine transaction</div>',
-                unsafe_allow_html=True
-            )
+            model.fit(df[features])
 
-        st.session_state.history.append({
-            "time": datetime.now().strftime("%H:%M"),
-            "type": "Transaction",
-            "input": f"{trans_type} GHS {amount}",
-            "result": "FRAUD" if is_fraud else "GENUINE"
-        })
+            # User input as DataFrame
+            user_row = pd.DataFrame([{
+                'amount': amount,
+                'oldbalanceOrg': old_bal,
+                'newbalanceOrig': new_bal,
+                'type_encoded': ["CASH_IN","CASH_OUT","DEBIT","PAYMENT","TRANSFER"].index(trans_type),
+                'balance_change_ratio': amount / old_bal if old_bal > 0 else 0,
+                'amount_deviation': np.abs(amount - df['amount'].mean()) / df['amount'].std()
+            }])
+
+            # Score: lower = more anomalous
+            anomaly_score = model.decision_function(user_row[features])[0]
+            is_fraud = anomaly_score < -0.05  # Tune threshold based on your testing (lower = stricter)
+
+            if is_fraud:
+                st.markdown(
+                    '<div class="alert-red">🚨 SUSPICIOUS TRANSACTION DETECTED!<br>Anomaly score indicates potential fraud. Contact your provider immediately.</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="alert-green">✅ Transaction appears normal</div>',
+                    unsafe_allow_html=True
+                )
+
+            st.session_state.history.append({
+                "time": datetime.now().strftime("%H:%M"),
+                "type": "Transaction",
+                "input": f"{trans_type} GHS {amount:.2f}",
+                "result": "FRAUD" if is_fraud else "GENUINE"
+            })
+
+        except Exception as e:
+            st.error(f"Error during check: {e}. Try different values.")
 
 # ────────────────────────────────────────────────
 #   TAB 4 – HISTORY
