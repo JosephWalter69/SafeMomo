@@ -74,15 +74,16 @@ sms_classifier = load_sms_classifier()
 @st.cache_resource
 def load_url_model():
     try:
+        # Load directly from your Hugging Face repo
         model = xgb.XGBClassifier()
-        model.load_model("phishing_url_xgb.json")
+        model.load_model("https://huggingface.co/JosephWalter69/ghana-momo-url-classifier/resolve/main/phishing_url_xgb.json")
+        st.success("✅ URL phishing XGBoost model loaded from Hugging Face!")
         return model
-    except:
-        st.warning("URL phishing model not found. Using basic rule check.")
+    except Exception as e:
+        st.warning(f"Could not load URL model from HF: {e}\nFalling back to basic rule check.")
         return None
 
 url_model = load_url_model()
-
 # ────────────────────────────────────────────────
 #   TABS
 # ────────────────────────────────────────────────
