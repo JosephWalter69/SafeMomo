@@ -231,10 +231,55 @@ with tab4:
         st.info("No checks yet.")
 
 # ────────────────────────────────────────────────
-#   TAB 5 & 6 – unchanged (How to Use & About)
+#   TAB 5 – HOW TO USE (user instructions only)
 # ────────────────────────────────────────────────
-# (keep your existing code for these tabs)
+with tab5:
+    st.subheader("How to Use MoMo Fraud Guard")
+    st.markdown("""
+    **1. SMS Check**  
+    - Copy any message you receive claiming to be from MTN, Telecel or AirtelTigo.  
+    - Paste it in the box and tap **Check SMS**.  
+    - Red alert = Do NOT reply, call or send money.  
+    - Green = Looks safe, but always confirm inside your official MoMo app.
 
+    **2. Link Check**  
+    - Copy any link sent to you via SMS, WhatsApp, etc.  
+    - Paste it and tap **Verify Link**.  
+    - Red alert = Never click or enter your PIN / details.  
+    - Green = Safe to visit (but type the official website manually if possible).
+
+    **3. Transaction Cross Check**  
+    - Enter the amount, old balance, new balance and type of transaction you want to verify.  
+    - Tap **Check Transaction**.  
+    - Red alert = Looks suspicious — contact your network or bank immediately.  
+    - Green = Appears normal.
+
+    **4. History**  
+    - See all your previous checks.  
+    - Use the **Clear History** button when you want to start fresh.
+
+    **For feature phone users**  
+    Forward suspicious SMS to our dedicated short code / number (feature coming soon) to receive an instant reply.
+    """)
+
+# ────────────────────────────────────────────────
+#   TAB 6 – ABOUT
+# ────────────────────────────────────────────────
+with tab6:
+    st.subheader("About the System")
+    st.markdown("""
+    **Ghana MoMo Fraud Guard**  
+    Final Year Computer Science Project  
+    Designed to help protect mobile money users in Ghana from common SMS scams, phishing links, and suspicious transactions.
+
+    - Easy to use on any smartphone  
+    - Free and private  
+    - Built to make mobile money safer for everyone
+
+    **Developer**: Nii Amoo  
+    **Goal**: Reduce fraud and increase trust in mobile money services.
+    """)
+    st.caption("Version 1.0 – March 2026")
 # ────────────────────────────────────────────────
 #   SIDEBAR – feedback summary
 # ────────────────────────────────────────────────
