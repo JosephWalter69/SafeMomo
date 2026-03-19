@@ -73,18 +73,12 @@ sms_classifier = load_sms_classifier()
 
 @st.cache_resource
 def load_url_model():
-    model_path = "phishing_url_xgb.json"
     try:
-        if os.path.exists(model_path):
-            model = xgb.XGBClassifier()
-            model.load_model(model_path)
-            st.success("✅ URL phishing model loaded successfully!")
-            return model
-        else:
-            st.warning("Model file not found in deployment. Using basic rule check.")
-            return None
-    except Exception as e:
-        st.warning(f"Error loading model: {e}. Using basic rule check.")
+        model = xgb.XGBClassifier()
+        model.load_model("phishing_url_xgb.json")
+        return model
+    except:
+        st.warning("URL phishing model not found. Using basic rule check.")
         return None
 
 url_model = load_url_model()
