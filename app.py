@@ -5,96 +5,189 @@ from sklearn.ensemble import IsolationForest
 from datetime import datetime
 from transformers import pipeline
 
-# ================== PAGE CONFIG & STYLING ==================
-st.set_page_config(page_title="MoMo Fraud Guard 🛡️", page_icon="🛡️", layout="centered")
-GREEN = "#006B3F"; YELLOW = "#FCD116"; RED = "#CE1126"
 
-st.markdown(f"""
-<style>
-.big-title {{font-size: 2.8rem; color: {GREEN}; text-align: center; font-weight: bold;}}
-.alert-green {{background-color: #d4edda; color: #155724; padding: 20px; border-radius: 15px; text-align: center; font-size: 1.6rem;}}
-.alert-red {{background-color: #f8d7da; color: #721c24; padding: 20px; border-radius: 15px; text-align: center; font-size: 1.6rem;}}
-</style>
-""", unsafe_allow_html=True)
+# ────────────────────────────────────────────────
+#   PAGE CONFIG & STYLING
+# ────────────────────────────────────────────────
+st.set_page_config(
+    page_title="MoMo Fraud Guard 🛡️",
+    page_icon="🛡️",
+    layout="centered",
+    initial_sidebar_state="expanded",
+)
+
+GREEN = "#006B3F"
+YELLOW = "#FCD116"
+RED = "#CE1126"
+
+st.markdown(
+    f"""
+    <style>
+    .big-title {{
+        font-size: 2.8rem;
+        color: {GREEN};
+        text-align: center;
+        font-weight: bold;
+    }}
+    .alert-green {{
+        background-color: #d4edda;
+        color: #155724;
+        padding: 20px;
+        border-radius: 15px;
+        text-align: center;
+        font-size: 1.6rem;
+        margin: 20px 0;
+    }}
+    .alert-red {{
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 20px;
+        border-radius: 15px;
+        text-align: center;
+        font-size: 1.6rem;
+        margin: 20px 0;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown('<div class="big-title">🛡️ MoMo Fraud Guard</div>', unsafe_allow_html=True)
 st.caption("Your personal shield against mobile money scams in Ghana")
 
-# ================== SESSION STATE FOR HISTORY ==================
+# ────────────────────────────────────────────────
+#   SESSION STATE
+# ────────────────────────────────────────────────
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-# ================== TABS ==================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📱 SMS Check", "🔗 Link Check", "💰 Transaction Cross Check",
-    "📜 History", "📖 How to Use", "ℹ️ About"
-])
-
+# ────────────────────────────────────────────────
+#   LOAD ADVANCED SMS CLASSIFIER (once, cached)
+# ────────────────────────────────────────────────
 @st.cache_resource
 def load_sms_classifier():
     try:
-        return pipeline("text-classification", model="./ghana_momo_sms_classifier")
-    except:
-        st.warning("Advanced SMS model not found — using basic keyword check.")
+        # Load directly from your Hugging Face repo
+        return pipeline(
+            "text-classification",
+            model="josephwalter69/ghana-momo-sms-classifier"   # ← change to your actual repo ID
+        )
+    except Exception as e:
+        st.warning(f"Could not load advanced model from Hugging Face: {e}\nUsing basic keyword check.")
         return None
 
 sms_classifier = load_sms_classifier()
 
-# ================== TAB 1: SMS CHECK ==================
+# ────────────────────────────────────────────────
+#   TABS
+# ────────────────────────────────────────────────
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📱 SMS Check",
+    "🔗 Link Check",
+    "💰 Transaction Cross Check",
+    "📜 History",
+    "📖 How to Use",
+    "ℹ️ About"
+])
+
+# ────────────────────────────────────────────────
+#   TAB 1 – SMS CHECK
+# ────────────────────────────────────────────────
 with tab1:
     st.subheader("Paste suspicious SMS")
-    sms = st.text_area("SMS Message", height=180, placeholder="You have received GHS 500... Call 0551234567 to return money")
-    
-if st.button("Check SMS", type="primary"):
-    if sms.strip():
-        if sms_classifier:
-            result = sms_classifier(sms)[0]
-            label = result['label']  # 'LABEL_0' or 'LABEL_1' — map to genuine/fake
-            score = result['score']
-            is_fake = label == 'LABEL_1'  # Adjust based on your training (0=genuine, 1=fake)
-            confidence = score if is_fake else 1 - score
-        else:
-            # Fallback to keywords
-            fake_keywords = ["send back", "return money", "wrong transfer", "call this number", "confirm PIN"]
-            is_fake = any(kw.lower() in sms.lower() for kw in fake_keywords)
-            confidence = 0.85 if is_fake else 0.70  # dummy
+    sms_text = st.text_area("SMS Message", height=180, placeholder="Example: URGENT! Wrong transfer of GHS 2000. Call now to return!")
 
-        if is_fake:
-            st.markdown(f'<div class="alert-red">🚨 FAKE SMS DETECTED! (Confidence: {confidence:.0%})<br>DO NOT reply or call!</div>', unsafe_allow_html=True)
+    if st.button("Check SMS", type="primary"):
+        if sms_text.strip():
+            if sms_classifier:
+                try:
+                    result = sms_classifier(sms_text)[0]
+                    label = result['label']          # Usually 'LABEL_0' or 'LABEL_1'
+                    score = result['score']
+                    # Assuming LABEL_1 = fake/scam (adjust if your training labels are reversed)
+                    is_fake = (label == 'LABEL_1')
+                    confidence = score if is_fake else (1 - score)
+                except Exception as e:
+                    st.error("Error using advanced model. Falling back to keywords.")
+                    is_fake = False
+                    confidence = 0.0
+            else:
+                # Fallback keyword check
+                fake_keywords = ["send back", "return money", "wrong transfer", "call this number", "confirm PIN", "urgent", "click here"]
+                is_fake = any(kw.lower() in sms_text.lower() for kw in fake_keywords)
+                confidence = 0.85 if is_fake else 0.70
+
+            if is_fake:
+                st.markdown(
+                    f'<div class="alert-red">🚨 FAKE SMS DETECTED! (Confidence: {confidence:.0%})<br>DO NOT reply, call, or send money!</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div class="alert-green">✅ Looks genuine (Confidence: {confidence:.0%})<br>Still double-check in your official MoMo app</div>',
+                    unsafe_allow_html=True
+                )
+
+            st.session_state.history.append({
+                "time": datetime.now().strftime("%H:%M"),
+                "type": "SMS",
+                "input": sms_text[:50] + "..." if len(sms_text) > 50 else sms_text,
+                "result": "FAKE" if is_fake else "GENUINE"
+            })
         else:
-            st.markdown(f'<div class="alert-green">✅ Looks genuine (Confidence: {confidence:.0%})<br>Still verify in MoMo app</div>', unsafe_allow_html=True)
-        
-        st.session_state.history.append({"time": datetime.now().strftime("%H:%M"), "type": "SMS", "input": sms[:50]+"...", "result": "FAKE" if is_fake else "GENUINE"})
-# ================== TAB 2: LINK CHECK ==================
+            st.warning("Please paste an SMS message first.")
+
+# ────────────────────────────────────────────────
+#   TAB 2 – LINK CHECK
+# ────────────────────────────────────────────────
 with tab2:
     st.subheader("Paste suspicious link")
-    link = st.text_input("Link/URL", placeholder="https://momo.mtn.com.gh/claim-prize")
-    
-    if st.button("Verify Link", type="primary"):
-        official = ["mtn.com.gh", "momo.mtn.com", "telecel", "airteltigo"]
-        suspicious = ["login", "verify", "pin", "claim", "refund", ".tk", ".ml", ".xyz"]
-        domain = link.lower().replace("https://","").split("/")[0]
-        
-        is_phish = not any(d in domain for d in official) or any(k in link.lower() for k in suspicious)
-        
-        if is_phish:
-            st.markdown('<div class="alert-red">🚨 PHISHING LINK!<br>DO NOT CLICK!</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="alert-green">✅ Safe link</div>', unsafe_allow_html=True)
-        
-        st.session_state.history.append({"time": datetime.now().strftime("%H:%M"), "type": "Link", "input": domain, "result": "PHISHING" if is_phish else "SAFE"})
+    link_url = st.text_input("Link/URL", placeholder="https://momo.mtn.com.gh/claim-prize")
 
-# ================== TAB 3: TRANSACTION CROSS CHECK ==================
+    if st.button("Verify Link", type="primary"):
+        if link_url.strip():
+            official_domains = ["mtn.com.gh", "momo.mtn.com", "telecel", "airteltigo"]
+            suspicious_keywords = ["login", "verify", "pin", "claim", "refund", ".tk", ".ml", ".xyz", "bit.ly"]
+
+            parsed_domain = link_url.lower().replace("https://", "").replace("http://", "").split("/")[0]
+            is_suspicious = (
+                not any(domain in parsed_domain for domain in official_domains)
+                or any(keyword in link_url.lower() for keyword in suspicious_keywords)
+            )
+
+            if is_suspicious:
+                st.markdown(
+                    '<div class="alert-red">🚨 POTENTIAL PHISHING LINK!<br>DO NOT CLICK or enter any details!</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="alert-green">✅ Appears to be a safe/official link</div>',
+                    unsafe_allow_html=True
+                )
+
+            st.session_state.history.append({
+                "time": datetime.now().strftime("%H:%M"),
+                "type": "Link",
+                "input": parsed_domain,
+                "result": "PHISHING" if is_suspicious else "SAFE"
+            })
+        else:
+            st.warning("Please paste a link first.")
+
+# ────────────────────────────────────────────────
+#   TAB 3 – TRANSACTION CROSS CHECK
+# ────────────────────────────────────────────────
 with tab3:
     st.subheader("Enter transaction details")
     col1, col2 = st.columns(2)
     with col1:
-        amount = st.number_input("Amount (GHS)", min_value=0.0, value=500.0)
-        old_bal = st.number_input("Old Balance (Sender)", min_value=0.0, value=2000.0)
+        amount = st.number_input("Amount (GHS)", min_value=0.0, value=500.0, step=10.0)
+        old_bal = st.number_input("Old Balance (Sender)", min_value=0.0, value=2000.0, step=100.0)
     with col2:
-        new_bal = st.number_input("New Balance (Sender)", min_value=0.0, value=1500.0)
+        new_bal = st.number_input("New Balance (Sender)", min_value=0.0, value=1500.0, step=100.0)
         trans_type = st.selectbox("Transaction Type", ["CASH_OUT", "TRANSFER", "PAYMENT", "DEPOSIT"])
-    
+
     if st.button("Check Transaction", type="primary"):
         np.random.seed(42)
         synthetic = pd.DataFrame({
@@ -103,28 +196,41 @@ with tab3:
             'newbalanceOrig': np.random.normal(2500, 1400, 500),
             'type_encoded': np.random.randint(0, 4, 500)
         })
-        
+
         model = IsolationForest(contamination=0.02, random_state=42)
         model.fit(synthetic)
-        
+
         user_data = pd.DataFrame([{
             'amount': amount,
             'oldbalanceOrg': old_bal,
             'newbalanceOrig': new_bal,
-            'type_encoded': ["CASH_OUT","TRANSFER","PAYMENT","DEPOSIT"].index(trans_type)
+            'type_encoded': ["CASH_OUT", "TRANSFER", "PAYMENT", "DEPOSIT"].index(trans_type)
         }])
-        
+
         score = model.decision_function(user_data)[0]
         is_fraud = score < 0
-        
-        if is_fraud:
-            st.markdown('<div class="alert-red">🚨 SUSPICIOUS TRANSACTION!<br>Possible fraud detected</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="alert-green">✅ Genuine transaction</div>', unsafe_allow_html=True)
-        
-        st.session_state.history.append({"time": datetime.now().strftime("%H:%M"), "type": "Transaction", "input": f"{trans_type} GHS {amount}", "result": "FRAUD" if is_fraud else "GENUINE"})
 
-# ================== TAB 4: HISTORY ==================
+        if is_fraud:
+            st.markdown(
+                '<div class="alert-red">🚨 SUSPICIOUS TRANSACTION!<br>Possible fraud detected</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                '<div class="alert-green">✅ Genuine transaction</div>',
+                unsafe_allow_html=True
+            )
+
+        st.session_state.history.append({
+            "time": datetime.now().strftime("%H:%M"),
+            "type": "Transaction",
+            "input": f"{trans_type} GHS {amount}",
+            "result": "FRAUD" if is_fraud else "GENUINE"
+        })
+
+# ────────────────────────────────────────────────
+#   TAB 4 – HISTORY
+# ────────────────────────────────────────────────
 with tab4:
     st.subheader("Your Check History")
     if st.session_state.history:
@@ -134,58 +240,64 @@ with tab4:
             st.session_state.history = []
             st.rerun()
     else:
-        st.info("No checks yet. Your results will appear here.")
+        st.info("No checks yet. Results will appear here.")
 
-# ================== TAB 5: HOW TO USE (EDUCATIONAL ONLY) ==================
+# ────────────────────────────────────────────────
+#   TAB 5 – HOW TO USE (user instructions only)
+# ────────────────────────────────────────────────
 with tab5:
     st.subheader("How to Use MoMo Fraud Guard")
     st.markdown("""
     **1. SMS Check**  
-    - Copy any SMS you receive from MTN, Telecel or AirtelTigo.  
+    - Copy any message you receive claiming to be from MTN, Telecel or AirtelTigo.  
     - Paste it in the box and tap **Check SMS**.  
-    - Red alert = Do NOT reply or call.  
-    - Green = Looks safe, but always double-check inside your official MoMo app.
+    - Red alert = Do NOT reply, call or send money.  
+    - Green = Looks safe, but always confirm inside your official MoMo app.
 
     **2. Link Check**  
-    - Copy any link sent to you (WhatsApp, SMS, etc.).  
+    - Copy any link sent to you via SMS, WhatsApp, etc.  
     - Paste it and tap **Verify Link**.  
-    - Red alert = Never click or enter your PIN.  
-    - Green = Safe to visit (but type the official website yourself).
+    - Red alert = Never click or enter your PIN / details.  
+    - Green = Safe to visit (but type the official website manually if possible).
 
     **3. Transaction Cross Check**  
-    - Enter the amount, old balance, new balance and type of transaction.  
+    - Enter the amount, old balance, new balance and type of transaction you want to verify.  
     - Tap **Check Transaction**.  
-    - Red alert = The transaction looks suspicious — contact your network immediately.  
-    - Green = Looks normal.
+    - Red alert = Looks suspicious — contact your network or bank immediately.  
+    - Green = Appears normal.
 
     **4. History**  
-    - See all your past checks in one place.  
-    - Clear history anytime you want.
+    - See all your previous checks.  
+    - Use the **Clear History** button when you want to start fresh.
 
-    **Tip for feature phone users**  
-    Forward any suspicious SMS to our dedicated number (coming soon) and you will receive an instant reply telling you if it is safe.
+    **For feature phone users**  
+    Forward suspicious SMS to our dedicated short code / number (feature coming soon) to receive an instant reply.
     """)
 
-# ================== TAB 6: ABOUT ==================
+# ────────────────────────────────────────────────
+#   TAB 6 – ABOUT
+# ────────────────────────────────────────────────
 with tab6:
     st.subheader("About the System")
     st.markdown("""
     **Ghana MoMo Fraud Guard**  
     Final Year Computer Science Project  
-    Designed to protect millions of mobile money users in Ghana from SMS scams, phishing links, and fake transactions.
-    
-    - Works on any smartphone (and soon feature phones)  
-    - Free and easy to use  
-    - Built to make mobile money safer for everyone in Ghana
-    
+    Designed to help protect mobile money users in Ghana from common SMS scams, phishing links, and suspicious transactions.
+
+    - Easy to use on any smartphone  
+    - Free and private  
+    - Built to make mobile money safer for everyone
+
     **Developer**: Nii Amoo  
-    **Goal**: Reduce financial losses and build trust in mobile money services.
+    **Goal**: Reduce fraud and increase trust in mobile money services.
     """)
     st.caption("Version 1.0 – March 2026")
 
-# Sidebar
+# ────────────────────────────────────────────────
+#   SIDEBAR
+# ────────────────────────────────────────────────
 with st.sidebar:
-    st.success("✅ System is LIVE and ready!")
-    st.info("Protect yourself before you lose money!")
+    st.success("System is running")
+    st.info("Protect yourself before sending or clicking anything suspicious!")
 
-st.caption("Complete system ready for your presentation today! 🚀")
+st.caption("Complete system ready for use and presentation")
