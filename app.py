@@ -6,6 +6,7 @@ from datetime import datetime
 from transformers import pipeline
 import os
 import csv
+import xgboost as xgb
 
 # ────────────────────────────────────────────────
 #   CONFIG & STYLING
@@ -53,7 +54,7 @@ def log_feedback(check_type, input_text, system_result, user_judgment, comment="
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     row = [timestamp, check_type, input_text[:200], system_result, user_judgment, comment]
     
-    with open(FEEDEDBACK_FILE, 'a', newline='', encoding='utf-8') as f:
+    with open(FEEDBACK_FILE, 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(row)
 
@@ -69,6 +70,18 @@ def load_sms_classifier():
         return None
 
 sms_classifier = load_sms_classifier()
+
+@st.cache_resource
+def load_url_model():
+    try:
+        model = xgb.XGBClassifier()
+        model.load_model("phishing_url_xgb.json")
+        return model
+    except:
+        st.warning("URL phishing model not found. Using basic rule check.")
+        return None
+
+url_model = load_url_model()
 
 # ────────────────────────────────────────────────
 #   TABS
@@ -187,35 +200,37 @@ with tab3:
         trans_type = st.selectbox("Type", ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"])
 
     if st.button("Check Transaction", type="primary"):
-        # Your existing transaction logic here (IsolationForest etc.)
-        # ... (keep your current code for model & prediction) ...
+        if amount > 0:
+            expected_diff = old_bal - new_bal
+            is_fraud = abs(expected_diff - amount) > 0.01
 
-        # After result display (is_fraud variable):
-        if is_fraud:
-            st.markdown('<div class="alert-red">🚨 SUSPICIOUS TRANSACTION!</div>', unsafe_allow_html=True)
+            if is_fraud:
+                st.markdown('<div class="alert-red">🚨 SUSPICIOUS TRANSACTION!<br>Amount mismatch detected!</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="alert-green">✅ Transaction appears normal</div>', unsafe_allow_html=True)
+
+            st.session_state.history.append({
+                "time": datetime.now().strftime("%H:%M"),
+                "type": "Transaction",
+                "input": f"{trans_type} {amount}",
+                "result": "FRAUD" if is_fraud else "GENUINE"
+            })
+
+            # Feedback
+            st.markdown("Was this correct?")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("👍 Yes", key=f"tx_yes_{len(st.session_state.history)}"):
+                    st.success("Thank you!")
+                    log_feedback("Transaction", f"{trans_type} {amount}", "GENUINE" if not is_fraud else "FRAUD", "correct")
+            with col2:
+                wrong_comment = st.text_input("What was wrong?", key=f"tx_wrong_{len(st.session_state.history)}")
+                if st.button("👎 Wrong", key=f"tx_no_{len(st.session_state.history)}"):
+                    correct_label = "GENUINE" if is_fraud else "FRAUD"
+                    st.info(f"Marked as {correct_label}")
+                    log_feedback("Transaction", f"{trans_type} {amount}", correct_label, "wrong", wrong_comment)
         else:
-            st.markdown('<div class="alert-green">✅ Looks normal</div>', unsafe_allow_html=True)
-
-        st.session_state.history.append({
-            "time": datetime.now().strftime("%H:%M"),
-            "type": "Transaction",
-            "input": f"{trans_type} GHS {amount}",
-            "result": "FRAUD" if is_fraud else "GENUINE"
-        })
-
-        # Feedback
-        st.markdown("Was this correct?")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("👍 Yes", key=f"tx_yes_{len(st.session_state.history)}"):
-                st.success("Thank you!")
-                log_feedback("Transaction", f"{trans_type} {amount}", "GENUINE" if not is_fraud else "FRAUD", "correct")
-        with col2:
-            wrong_comment = st.text_input("What was wrong?", key=f"tx_wrong_{len(st.session_state.history)}")
-            if st.button("👎 Wrong", key=f"tx_no_{len(st.session_state.history)}"):
-                correct_label = "GENUINE" if is_fraud else "FRAUD"
-                st.info(f"Marked as {correct_label}")
-                log_feedback("Transaction", f"{trans_type} {amount}", correct_label, "wrong", wrong_comment)
+            st.warning("Please enter a valid amount.")
 
 # ────────────────────────────────────────────────
 #   TAB 4 – HISTORY
