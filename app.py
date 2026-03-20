@@ -36,7 +36,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown('<div class="big-title">🛡️ MoMo Fraud Guard</div>', unsafe_allow_html=True)
+st.markdown('<div class="big-title">🛡️ MoMo Fraud Guard 🛡️</div>', unsafe_allow_html=True)
 st.caption("Your shield against mobile money scams in Ghana")
 
 # ────────────────────────────────────────────────
