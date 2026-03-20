@@ -9,12 +9,34 @@ import csv
 import xgboost as xgb
 import requests
 import tempfile
-# PWA manifest & icons
+
+# Serve static files (icons & manifest)
+if not os.path.exists("static"):
+    os.makedirs("static")
+
+# Link manifest
 st.markdown(
     """
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#006B3F">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="icon" type="image/png" href="/static/icon-192.png">
+    """,
+    unsafe_allow_html=True
+)
+
+# Optional: Force PWA install prompt (for testing)
+st.markdown(
+    """
+    <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+          console.log('ServiceWorker registration successful');
+        });
+      });
+    }
+    </script>
     """,
     unsafe_allow_html=True
 )
