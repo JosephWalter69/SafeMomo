@@ -9,7 +9,15 @@ import csv
 import xgboost as xgb
 import requests
 import tempfile
-
+# PWA manifest & icons
+st.markdown(
+    """
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#006B3F">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    """,
+    unsafe_allow_html=True
+)
 
 # ────────────────────────────────────────────────
 #   CONFIG & STYLING
