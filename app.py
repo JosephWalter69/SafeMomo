@@ -36,6 +36,7 @@ st.markdown(
         });
       });
     }
+    navigator.serviceWorker.register('/service-worker.js');
     </script>
     """,
     unsafe_allow_html=True
