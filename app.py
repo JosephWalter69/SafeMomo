@@ -19,6 +19,7 @@ st.set_page_config(
     page_icon="🛡️",
     layout="centered",
     initial_sidebar_state="expanded",
+)
 # Favicon & title (replace with your own icon if you have one)
 st.set_page_config(
     page_title="MoMo Fraud Guard 🛡️",
@@ -29,7 +30,6 @@ st.set_page_config(
         'Report a bug': "https://github.com/JosephWalter69/SafeMomo/issues",
         'About': "Final Year Project - Protecting Ghana from Mobile Money Fraud"
     }
-)
 
 # Optional: Custom sidebar logo/header
 with st.sidebar:
